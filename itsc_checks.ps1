@@ -110,7 +110,7 @@ if ($Interactive -eq $true) {
 
     if ($LanmanServerStatus -ne $true) {
         $LanmanServerTitle    = 'LanmanServer Service'
-        $LanmanServerQuestion = "LanmanServer Service on $Computer is not running. Would you like to start it?"
+        $LanmanServerQuestion = "LanmanServer Service on $Computer is not running. Would you like to start it and set startup to Automatic?"
         $LanmanServerChoices  = '&Yes', '&No'
 
         $LanmanServerDecision = $Host.UI.PromptForChoice($LanmanServerTitle, $LanmanServerQuestion, $LanmanServerChoices, 1)
@@ -131,6 +131,10 @@ if ($Interactive -eq $true) {
                         Write-Host "ERROR: Unable to start LanmanServer Service"
                     }
                 }
+
+              Set-Service -Name LanmanServer -StartupType Automatic
+              Write-Host "LanmanServer has been set to Automatic startup"
+
             }
             Write-Host "LanmanServer Service on $Computer has been started."
 
@@ -145,7 +149,7 @@ if ($Interactive -eq $true) {
  
     if ($RemoteRegistryStatus -ne $true) {
         $RemoteRegistryTitle    = 'RemoteRegistry Service'
-        $RemoteRegistryQuestion = "RemoteRegistry Service on $Computer is not running. Would you like to start it?"
+        $RemoteRegistryQuestion = "RemoteRegistry Service on $Computer is not running. Would you like to start it and set startup to Automatic?"
         $RemoteRegistryChoices  = '&Yes', '&No'
 
         $RemoteRegistryDecision = $Host.UI.PromptForChoice($RemoteRegistryTitle, $RemoteRegistryQuestion, $RemoteRegistryChoices, 1)
@@ -166,6 +170,10 @@ if ($Interactive -eq $true) {
                         Write-Host "ERROR: Unable to start RemoteRegistry Service"
                     }
                 }
+
+                Set-Service -Name RemoteRegistry -StartupType Automatic
+                Write-Host "RemoteRegistry has been set to Automatic startup"
+
             }
             Write-Host "RemoteRegistry Service on $Computer has been started."
 
@@ -195,19 +203,21 @@ if ($Interactive -eq $true) {
 
     if ($LanmanServerStatus -ne $true) {
         Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-            $arrService = Get-Service -Name LanmanServer
-            while ($arrService.Status -ne 'Running')
-            {
-                Start-Service LanmanServer
-                Write-Host $arrService.status
-                Write-Host 'Service starting'
-                Start-Sleep -seconds 60
-                $arrService.Refresh()
-                if ($arrService.Status -ne 'Running') {
-                    Write-Host "ERROR: Unable to start LanmanServer Service"
-                }
-            }
-        Write-Host "LanmanServer Service on $Computer has been started."
+          $arrService = Get-Service -Name LanmanServer
+          while ($arrService.Status -ne 'Running')
+          {
+              Start-Service LanmanServer
+              Write-Host $arrService.status
+              Write-Host 'Service starting'
+              Start-Sleep -seconds 60
+              $arrService.Refresh()
+              if ($arrService.Status -ne 'Running') {
+                  Write-Host "ERROR: Unable to start LanmanServer Service"
+              }
+          }
+          Write-Host "LanmanServer Service on $Computer has been started."
+          Set-Service -Name LanmanServer -StartupType Automatic
+          Write-Host "LanmanServer has been set to Automatic startup"
         }
     } else {
         Write-Host "LanmanServer Service on $Computer already running. No action required"
@@ -215,20 +225,22 @@ if ($Interactive -eq $true) {
 
     if ($RemoteRegistryStatus -ne $true) {
         Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-            $arrService = Get-Service -Name RemoteRegistry
-            Write-Host "Checking Service: RemoteRegistry"
-            while ($arrService.Status -ne 'Running')
-            {
-                Start-Service RemoteRegistry
-                Write-Host $arrService.status
-                Write-Host 'Service starting'
-                Start-Sleep -seconds 60
-                $arrService.Refresh()
-                if ($arrService.Status -ne 'Running') {
-                    Write-Host "ERROR: Unable to start RemoteRegistry Service"
-                }
-            }
+          $arrService = Get-Service -Name RemoteRegistry
+          Write-Host "Checking Service: RemoteRegistry"
+          while ($arrService.Status -ne 'Running')
+          {
+              Start-Service RemoteRegistry
+              Write-Host $arrService.status
+              Write-Host 'Service starting'
+              Start-Sleep -seconds 60
+              $arrService.Refresh()
+              if ($arrService.Status -ne 'Running') {
+                  Write-Host "ERROR: Unable to start RemoteRegistry Service"
+              }
+          }
         Write-Host "RemoteRegistry Service on $Computer has been started."
+        Set-Service -Name RemoteRegistry -StartupType Automatic
+        Write-Host "RemoteRegistry has been set to Automatic startup"
         }
     } else {
         Write-Host "RemoteRegistry Service on $Computer already running. No action required"
