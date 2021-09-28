@@ -146,7 +146,6 @@ if ($Interactive -eq $true) {
      }
 
 
- 
     if ($RemoteRegistryStatus -ne $true) {
         $RemoteRegistryTitle    = 'RemoteRegistry Service'
         $RemoteRegistryQuestion = "RemoteRegistry Service on $Computer is not running. Would you like to start it and set startup to Automatic?"
@@ -245,7 +244,6 @@ if ($Interactive -eq $true) {
     } else {
         Write-Host "RemoteRegistry Service on $Computer already running. No action required"
     }
-
 }
 
 # -----------------------------------------------------------
@@ -256,4 +254,3 @@ foreach($Port in $TestPorts)
 {
     Test-NetConnection -ComputerName $Computer -Port $Port | select -Property RemotePort, TcpTestSucceeded
 }
- 
