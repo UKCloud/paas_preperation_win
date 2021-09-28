@@ -1,13 +1,16 @@
 Param(
   [Parameter(Mandatory=$True,HelpMessage='Enter the computer name or IP')]
   [String]$Computer,
+
   [Parameter(Mandatory=$True,HelpMessage='Enter your Username')]
   [String]$Username,
+
   [Parameter(Mandatory=$True,HelpMessage='Enter your Password')]
   [SecureString]$Password,
+
   [Parameter(HelpMessage='Defines if we run in interactive mode or not')]
   [Bool]$Interactive = $true
-  )
+)
 
 # Define ISC Servers
 [Array] $ISCservers = '172.31.255.17', '172.31.255.6'
