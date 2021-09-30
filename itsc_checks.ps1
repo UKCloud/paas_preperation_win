@@ -116,37 +116,67 @@ function StartEnable-Service
 
 # -----------------------------------------------------------
 
+Write-Host ''
+Write-Host "Connection Test - Pre-checks"
+Write-Host "-------------------------------------------------------"
 
 # Pre-Checks
 
-$WinRMTest = Test-NetConnection -ComputerName $Computer -Port 5985
+$WinRMTest = Test-NetConnection -ComputerName $Computer -Port 5985 -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+
+Write-Host "Testing WinRM connection (port 5985) from local machine to target $Computer"
+
 
 if ($WinRMTest.TcpTestSucceeded -ne $true) {
-    Write-Host "Unable to establish WinRM connection to $Computer on port 5985"
+    Write-Host "WARNING: WinRM Connection to $Computer is unavailable"
     Break
-} else {
-    Write-Host "WinRM Connection test to $Computer on port 5985 successful"
 }
+else {
+    Write-Host "SUCCESS: WinRM Connection to $Computer on port 5985 available"
+}
+Write-Host ''
 
 # Test connections to target machine
-Write-Host "Testing connections from local machine to $Computer before we change anything"
-foreach($Port in $TestPorts)
-{
-    Test-NetConnection -ComputerName $Computer -Port $Port | select -Property RemotePort, TcpTestSucceeded
+Write-Host "Testing ports on $Computer from local machine"
+foreach($Port in $TestPorts) {
+    Test-NetConnection -ComputerName $Computer -Port $Port -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | select -Property RemotePort, TcpTestSucceeded
 }
 
+Write-Host ''
 
 # -----------------------------------------------------------
 
 # Remote Checks
 
 Write-Host "Testing connections from $Computer to ISC Servers"
-foreach($Server in $ISCservers)
-{
-    Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-        Test-NetConnection -ComputerName $Using:Server -Port 3121 | select -Property RemoteAddress, RemotePort, TcpTestSucceeded
-    }
+
+# Reinitalise all variables
+$CheckISCServer = $null
+$CheckISCSuccess = $false
+$CheckISCTarget = $null
+
+foreach($Server in $ISCservers) {
+
+  $CheckISCServer = Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
+    $CheckISCServer = Test-NetConnection -ComputerName $Using:Server -Port 3121 -ErrorAction SilentlyContinue -WarningAction SilentlyContinue  | select -Property RemoteAddress, RemotePort, TcpTestSucceeded
+    Return $CheckISCServer
+  }
+
+  if ($CheckISCServer.TcpTestSucceeded -eq $true) {
+    $CheckISCSuccess = $true
+    $CheckISCTarget = $CheckISCServer.RemoteAddress
+  }
+
 }
+
+if ($CheckISCSuccess -eq $false) {
+  Write-Host "WARNING: No connection available to any UKCloud ISC Server"
+  Break
+}
+else {
+  Write-Host "SUCCESS: Connection to UKCloud ISC server available: $CheckISCTarget"
+}
+Write-Host ''
 
 $FWRfpsStatus = Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
     $FWRfpsiStatus = Get-NetFirewallRule -DisplayName "File and Printer Sharing (SMB-In)" | select -Property Enabled
@@ -160,6 +190,10 @@ $FWRfpsStatus = Invoke-Command -ComputerName $Computer -Credential $cred -Script
 if ($Interactive -eq $true) {
     Write-Host "Running in interactive mode"
 
+    Write-Host ''
+    Write-Host 'Checking Firewall'
+    Write-Host "-------------------------------------------------------"
+  
     if ($FWRfpsStatus.Enabled -ne $true) {
         $FWRfpsTitle    = 'Firewall Rule'
         $FWRfpsQuestion = "Firewall rule on $Computer is not enabled. Would you like to enable it?"
@@ -187,6 +221,11 @@ if ($Interactive -eq $true) {
 if ($Interactive -eq $false) {
   Write-Host "Running in non-interactive mode"
 
+  Write-Host ''
+  Write-Host 'Checking Firewall'
+  Write-Host "-------------------------------------------------------"
+
+
   if ($FWRfpsStatus.Enabled -ne $true) {
       Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
           Enable-NetFirewallRule -DisplayName "File and Printer Sharing (SMB-In)"
@@ -199,14 +238,26 @@ if ($Interactive -eq $false) {
 
 # -----------------------------------------------------------
 
+Write-Host ''
+Write-Host 'Checking Services'
+Write-Host "-------------------------------------------------------"
+
 Invoke-Command -ComputerName localhost -Credential $cred -ScriptBlock ${Function:StartEnable-Service} -ArgumentList 'LanmanServer', $Interactive
 Invoke-Command -ComputerName localhost -Credential $cred -ScriptBlock ${Function:StartEnable-Service} -ArgumentList 'RemoteRegistry', $Interactive
 
 # -----------------------------------------------------------
 
+Write-Host ''
+
 # Test connections to target machine
-Write-Host "Testing connections from local machine to $Computer now that all steps have been completed"
+Write-Host ''
+Write-Host "Connection Test - Post-Checks"
+Write-Host "-------------------------------------------------------"
+Write-Host ''
+Write-Host "RemotePort TcpTestSucceeded"
+Write-Host "---------- ---------------- "
+
 foreach($Port in $TestPorts)
 {
-    Test-NetConnection -ComputerName $Computer -Port $Port | select -Property RemotePort, TcpTestSucceeded
+    Test-NetConnection -ComputerName $Computer -Port $Port -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | select -Property RemotePort, TcpTestSucceeded
 }
