@@ -1,13 +1,16 @@
 Param(
   [Parameter(Mandatory=$True,HelpMessage='Enter the computer name or IP')]
   [String]$Computer,
+
   [Parameter(Mandatory=$True,HelpMessage='Enter your Username')]
   [String]$Username,
+
   [Parameter(Mandatory=$True,HelpMessage='Enter your Password')]
   [SecureString]$Password,
+
   [Parameter(HelpMessage='Defines if we run in interactive mode or not')]
   [Bool]$Interactive = $true
-  )
+)
 
 # Define ISC Servers
 [Array] $ISCservers = '172.31.255.17', '172.31.255.6'
@@ -20,6 +23,99 @@ Param(
 $cred = New-Object System.Management.Automation.PSCredential ($Username, $Password)
 
 # -----------------------------------------------------------
+
+function StartEnable-Service
+{ 
+  param(
+    [Parameter(Mandatory=$true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$ServiceName,
+
+    [Parameter(HelpMessage='Defines if we run in interactive mode or not')]
+    [Bool]$Interactive = $false  
+  )
+
+  $error.clear()
+  $arrService = Get-Service -Name $ServiceName
+  if ($error) {
+      Write-Host "Error Occured"
+      Return $error
+  } 
+
+
+  if ($Interactive -eq $true -And $arrService.Status -ne 'Running') {
+    $AskStartServiceTitle    = 'Start Service'
+    $AskStartServiceQuestion = "$ServiceName service is not running. Would you like to start it?"
+    $AskStartServiceChoices  = '&Yes', '&No'
+    $AskStartServiceDecision = $Host.UI.PromptForChoice($AskStartServiceTitle, $AskStartServiceQuestion, $AskStartServiceChoices, 1)
+
+    if ($AskStartServiceDecision -eq 0) {
+      $AnswerStartService = $true
+    }
+
+    else {
+      $AnswerStartService = $false
+    }
+  }
+  elseif ($Interactive -eq $true -And $arrService.Status -eq 'Running') {
+      Write-Host "$ServiceName service is already running"
+    }
+
+
+  if ($Interactive -eq $true -And $arrService.StartType -ne 'Automatic') {
+    $AskEnableServiceTitle    = 'Load service on Startup'
+    $AskEnableServiceQuestion = "$ServiceName service is not set to run on Startup. Would you like to enable it?"
+    $AskEnableServiceChoices  = '&Yes', '&No'
+    $AskEnableServiceDecision = $Host.UI.PromptForChoice($AskEnableServiceTitle, $AskEnableServiceQuestion, $AskEnableServiceChoices, 1)
+
+    if ($AskEnableServiceDecision -eq 0) {
+      $AnswerEnableService = $true
+    }
+
+    else {
+      $AnswerEnableService = $false
+    }
+  }
+  elseif ($Interactive -eq $true -And $arrService.StartType -ne 'Automatic') {
+    Write-Host "$ServiceName service is already set to automatically start"
+  }
+
+
+
+  if ($Interactive -eq $false -Or $AnswerStartService -eq $true ) {
+
+    Write-Host "Checking Service: $ServiceName"
+    while ($arrService.Status -ne 'Running')
+    {
+        Start-Service $ServiceName
+        Write-Host $arrService.status
+        Write-Host 'Service starting'
+        Start-Sleep -seconds 60
+        $arrService.Refresh()
+        if ($arrService.Status -ne 'Running') {
+            Write-Host "ERROR: Unable to start $ServiceName Service"
+        }
+    }
+
+  }
+
+  if ($Interactive -eq $false -Or $AnswerEnableService -eq $true ) {
+
+    if ($arrService.StartType -ne 'Automatic') {
+      Set-Service -Name $ServiceName -StartupType Automatic
+      Write-Host "$ServiceName has been set to Automatic startup"
+    }
+    else
+    {
+      Write-Host "$ServiceName is already set to Automatic startup - no action required"
+    }
+
+  }
+
+}
+
+# -----------------------------------------------------------
+
 
 # Pre-Checks
 
@@ -57,29 +153,6 @@ $FWRfpsStatus = Invoke-Command -ComputerName $Computer -Credential $cred -Script
     Return $FWRfpsiStatus
 }
 
-$LanmanServerStatus = Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-
-        $LanmanServeriStatus = Get-Service -Name LanmanServer
-        if ($LanmanServeriStatus.Status -eq 'Running')
-        {
-            Return $true
-        } else {
-            Return $false
-        }
-}
-
-$RemoteRegistryStatus = Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-
-        $RemoteRegistryiStatus = Get-Service -Name RemoteRegistry
-        if ($RemoteRegistryiStatus.Status -eq 'Running')
-        {
-            Return $true
-        } else {
-            Return $false
-        }
-
-}
-
 # -----------------------------------------------------------
 
 # Interactive
@@ -107,134 +180,27 @@ if ($Interactive -eq $true) {
         Write-Host "Firewall rule for File and Printer Sharing (SMB-In) on $Computer already enabled. No action required"
      }
 
-
-    if ($LanmanServerStatus -ne $true) {
-        $LanmanServerTitle    = 'LanmanServer Service'
-        $LanmanServerQuestion = "LanmanServer Service on $Computer is not running. Would you like to start it?"
-        $LanmanServerChoices  = '&Yes', '&No'
-
-        $LanmanServerDecision = $Host.UI.PromptForChoice($LanmanServerTitle, $LanmanServerQuestion, $LanmanServerChoices, 1)
-        if ($LanmanServerDecision -eq 0) {
-
-            Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-
-                $arrService = Get-Service -Name LanmanServer
-                Write-Host "Checking Service: LanmanServer"
-                while ($arrService.Status -ne 'Running')
-                {
-                    Start-Service LanmanServer
-                    Write-Host $arrService.status
-                    Write-Host 'Service starting'
-                    Start-Sleep -seconds 60
-                    $arrService.Refresh()
-                    if ($arrService.Status -ne 'Running') {
-                        Write-Host "ERROR: Unable to start LanmanServer Service"
-                    }
-                }
-            }
-            Write-Host "LanmanServer Service on $Computer has been started."
-
-        } else {
-            Write-Host "LanmanServer Service on $Computer has not been started."
-        }
-     } else {
-        Write-Host "LanmanServer Service on $Computer already running. No action required"
-     }
-
-
- 
-    if ($RemoteRegistryStatus -ne $true) {
-        $RemoteRegistryTitle    = 'RemoteRegistry Service'
-        $RemoteRegistryQuestion = "RemoteRegistry Service on $Computer is not running. Would you like to start it?"
-        $RemoteRegistryChoices  = '&Yes', '&No'
-
-        $RemoteRegistryDecision = $Host.UI.PromptForChoice($RemoteRegistryTitle, $RemoteRegistryQuestion, $RemoteRegistryChoices, 1)
-        if ($RemoteRegistryDecision -eq 0) {
-
-            Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-
-                $arrService = Get-Service -Name RemoteRegistry
-                Write-Host "Checking Service: RemoteRegistry"
-                while ($arrService.Status -ne 'Running')
-                {
-                    Start-Service RemoteRegistry
-                    Write-Host $arrService.status
-                    Write-Host 'Service starting'
-                    Start-Sleep -seconds 60
-                    $arrService.Refresh()
-                    if ($arrService.Status -ne 'Running') {
-                        Write-Host "ERROR: Unable to start RemoteRegistry Service"
-                    }
-                }
-            }
-            Write-Host "RemoteRegistry Service on $Computer has been started."
-
-        } else {
-            Write-Host "RemoteRegistry Service on $Computer has not been started."
-        }
-     } else {
-        Write-Host "RemoteRegistry Service on $Computer already running. No action required"
-     }
-
 }
- # -----------------------------------------------------------
 
- # Non-Interactive
+# Non-Interactive
 
- if ($Interactive -eq $false) {
-    Write-Host "Running in non-interactive mode"
+if ($Interactive -eq $false) {
+  Write-Host "Running in non-interactive mode"
 
-    if ($FWRfpsStatus.Enabled -ne $true) {
-        Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-            Enable-NetFirewallRule -DisplayName "File and Printer Sharing (SMB-In)"
-        }
-        Write-Host "Firewall rule for File and Printer Sharing (SMB-In) on $Computer not enabled."
-    } else {
-        Write-Host "Firewall rule for File and Printer Sharing (SMB-In) on $Computer already enabled. No action required"
-    }
-
-    if ($LanmanServerStatus -ne $true) {
-        Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-            $arrService = Get-Service -Name LanmanServer
-            while ($arrService.Status -ne 'Running')
-            {
-                Start-Service LanmanServer
-                Write-Host $arrService.status
-                Write-Host 'Service starting'
-                Start-Sleep -seconds 60
-                $arrService.Refresh()
-                if ($arrService.Status -ne 'Running') {
-                    Write-Host "ERROR: Unable to start LanmanServer Service"
-                }
-            }
-        Write-Host "LanmanServer Service on $Computer has been started."
-        }
-    } else {
-        Write-Host "LanmanServer Service on $Computer already running. No action required"
-    }
-
-    if ($RemoteRegistryStatus -ne $true) {
-        Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
-            $arrService = Get-Service -Name RemoteRegistry
-            Write-Host "Checking Service: RemoteRegistry"
-            while ($arrService.Status -ne 'Running')
-            {
-                Start-Service RemoteRegistry
-                Write-Host $arrService.status
-                Write-Host 'Service starting'
-                Start-Sleep -seconds 60
-                $arrService.Refresh()
-                if ($arrService.Status -ne 'Running') {
-                    Write-Host "ERROR: Unable to start RemoteRegistry Service"
-                }
-            }
-        Write-Host "RemoteRegistry Service on $Computer has been started."
-        }
-    } else {
-        Write-Host "RemoteRegistry Service on $Computer already running. No action required"
-    }
-
+  if ($FWRfpsStatus.Enabled -ne $true) {
+      Invoke-Command -ComputerName $Computer -Credential $cred -ScriptBlock {
+          Enable-NetFirewallRule -DisplayName "File and Printer Sharing (SMB-In)"
+      }
+      Write-Host "Firewall rule for File and Printer Sharing (SMB-In) on $Computer not enabled."
+  } else {
+      Write-Host "Firewall rule for File and Printer Sharing (SMB-In) on $Computer already enabled. No action required"
+  }
 }
+
+# -----------------------------------------------------------
+
+Invoke-Command -ComputerName localhost -Credential $cred -ScriptBlock ${Function:StartEnable-Service} -ArgumentList 'LanmanServer', $Interactive
+Invoke-Command -ComputerName localhost -Credential $cred -ScriptBlock ${Function:StartEnable-Service} -ArgumentList 'RemoteRegistry', $Interactive
 
 # -----------------------------------------------------------
 
@@ -244,4 +210,3 @@ foreach($Port in $TestPorts)
 {
     Test-NetConnection -ComputerName $Computer -Port $Port | select -Property RemotePort, TcpTestSucceeded
 }
- 
